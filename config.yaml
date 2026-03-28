@@ -1,0 +1,9 @@
+filters:
+  city: "roma"
+  price_min: 100000
+  price_max: 300000
+  type: "vendita"
+
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  channel_id: "${TELEGRAM_CHANNEL_ID}"
