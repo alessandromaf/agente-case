@@ -11,23 +11,36 @@ SOURCE_LABELS = {
 
 def _format_message(listing: Listing) -> str:
     label = SOURCE_LABELS.get(listing.source, listing.source)
-    price_str = f"\u20ac{listing.price:,}".replace(",", ".")
 
-    lines = [
-        f"\U0001f3e0 *Nuovo annuncio su {label}*",
-        f"{listing.title}",
-        f"\U0001f4cd {listing.city} \u2014 {price_str}",
-    ]
+    lines = [f"\U0001f3e0 *Nuovo annuncio su {label}*"]
 
+    if listing.title:
+        lines.append(f"{listing.title}")
+
+    # Location line: address and/or city
+    location_parts = []
+    if listing.address:
+        location_parts.append(listing.address)
+    if listing.city and listing.city not in (listing.address or ""):
+        location_parts.append(listing.city)
+    if location_parts:
+        lines.append(f"\U0001f4cd {', '.join(location_parts)}")
+
+    # Price
+    if listing.price > 0:
+        price_str = f"\u20ac {listing.price:,}".replace(",", ".")
+        lines.append(f"\U0001f4b0 {price_str}")
+
+    # Details: rooms, sqm
     details = []
     if listing.rooms:
         details.append(f"{listing.rooms} locali")
     if listing.sqm:
         details.append(f"{listing.sqm} m\u00b2")
     if details:
-        lines.append(" \u00b7 ".join(details))
+        lines.append(f"\U0001f4d0 {' \u00b7 '.join(details)}")
 
-    lines.append(f"\U0001f517 [Vedi annuncio]({listing.url})")
+    lines.append(f"\n\U0001f517 [Vedi annuncio]({listing.url})")
     return "\n".join(lines)
 
 

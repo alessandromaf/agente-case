@@ -10,6 +10,7 @@ class Listing:
     price: int
     city: str
     url: str
+    address: str = ""
     image_url: str = ""
     rooms: str = ""
     sqm: str = ""

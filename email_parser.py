@@ -81,7 +81,12 @@ def parse_immobiliare(html: str, subject: str) -> list[Listing]:
         if sqm_m:
             sqm = sqm_m.group(1)
 
-        # Clean URL (remove tracking params)
+        # Extract address from title
+        address = ""
+        addr_m = re.search(r"in vendita (?:in |a )(.+)", title, re.IGNORECASE)
+        if addr_m:
+            address = addr_m.group(1).strip()
+
         clean_url = href.split("?")[0]
 
         listings.append(Listing(
@@ -90,6 +95,7 @@ def parse_immobiliare(html: str, subject: str) -> list[Listing]:
             title=title[:150],
             price=price,
             city="",
+            address=address,
             url=clean_url,
             rooms=rooms,
             sqm=sqm,
@@ -151,6 +157,11 @@ def parse_idealista(html: str, subject: str) -> list[Listing]:
         if sqm_m:
             sqm = sqm_m.group(1)
 
+        address = ""
+        addr_m = re.search(r"in vendita (?:in |a )(.+)", title, re.IGNORECASE)
+        if addr_m:
+            address = addr_m.group(1).strip()
+
         clean_url = href.split("?")[0]
 
         listings.append(Listing(
@@ -159,6 +170,7 @@ def parse_idealista(html: str, subject: str) -> list[Listing]:
             title=title[:150],
             price=price,
             city="",
+            address=address,
             url=clean_url,
             rooms=rooms,
             sqm=sqm,
@@ -194,12 +206,15 @@ def parse_casa(html: str, subject: str) -> list[Listing]:
 
     print(f"    [debug] casa unique listing IDs: {len(listing_links)}")
 
+    # Debug: dump raw HTML around first listing to understand structure
+    first_dump = True
     for lid, data in listing_links.items():
         href = data["href"]
 
         # Walk up from ALL links with this ID to find the largest containing block
         all_text = ""
         title = ""
+        card_html = ""
         for el in data["elements"]:
             text = el.get_text(strip=True)
             if len(text) > len(title) and "foto" not in text.lower() and "vedi" not in text.lower():
@@ -207,25 +222,39 @@ def parse_casa(html: str, subject: str) -> list[Listing]:
 
             # Walk up multiple levels to find the card container
             for ancestor in el.parents:
-                if ancestor.name in ["table", "div"] and ancestor != soup:
+                if ancestor.name in ["table", "div", "tr", "td"] and ancestor != soup:
                     ancestor_text = ancestor.get_text(" ", strip=True)
-                    if len(ancestor_text) > len(all_text) and len(ancestor_text) < 2000:
+                    if len(ancestor_text) > len(all_text) and len(ancestor_text) < 3000:
                         all_text = ancestor_text
+                        card_html = str(ancestor)
                     if _extract_price(ancestor_text) > 0:
                         break
 
-        price = _extract_price(all_text)
-        print(f"    [debug] casa {lid}: price={price} title={title[:50]}")
+        # Debug: dump first card raw HTML
+        if first_dump:
+            print(f"    [debug] FIRST CARD full text ({len(all_text)} chars):")
+            print(f"    [debug] {all_text[:500]}")
+            first_dump = False
 
-        # Extract rooms/sqm
+        price = _extract_price(all_text)
+
+        # Extract address from title (e.g. "Appartamento in vendita in Via Fossato Vecchio")
+        address = ""
+        addr_m = re.search(r"in vendita (?:in |a )(.+)", title, re.IGNORECASE)
+        if addr_m:
+            address = addr_m.group(1).strip()
+
+        # Extract rooms/sqm from full card text
         rooms = ""
         sqm = ""
         rooms_m = re.search(r"(\d+)\s*local", all_text, re.IGNORECASE)
         if rooms_m:
             rooms = rooms_m.group(1)
-        sqm_m = re.search(r"(\d+)\s*m[²2q]", all_text, re.IGNORECASE)
+        sqm_m = re.search(r"(\d+)\s*m[²2q\u00b2]", all_text, re.IGNORECASE)
         if sqm_m:
             sqm = sqm_m.group(1)
+
+        print(f"    [debug] casa {lid}: price={price} sqm={sqm} rooms={rooms} addr={address[:40]}")
 
         clean_url = href.split("?")[0]
 
@@ -235,6 +264,7 @@ def parse_casa(html: str, subject: str) -> list[Listing]:
             title=title[:150] if title else f"Annuncio {lid}",
             price=price,
             city="",
+            address=address,
             url=clean_url,
             rooms=rooms,
             sqm=sqm,
