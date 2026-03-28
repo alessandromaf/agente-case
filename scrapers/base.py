@@ -7,11 +7,23 @@ HEADERS = {
         "Chrome/131.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "max-age=0",
+    "Connection": "keep-alive",
+    "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 
 def fetch_page(url: str) -> str:
-    resp = httpx.get(url, headers=HEADERS, follow_redirects=True, timeout=30)
-    resp.raise_for_status()
-    return resp.text
+    with httpx.Client(http2=True, follow_redirects=True, timeout=30) as client:
+        resp = client.get(url, headers=HEADERS)
+        resp.raise_for_status()
+        return resp.text
