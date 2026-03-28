@@ -8,10 +8,36 @@ def _parse_price(text: str) -> int:
     return int(digits) if digits else 0
 
 
+def _extract_price(text: str) -> int:
+    """Extract price from text like '€ 95.000', '95000 €', '€95,000', etc."""
+    # Try various price patterns
+    patterns = [
+        r"€\s*([\d.,]+)",           # € 95.000 or €95,000
+        r"([\d.,]+)\s*€",           # 95.000 € or 95,000€
+        r"EUR\s*([\d.,]+)",         # EUR 95.000
+        r"([\d.,]+)\s*EUR",         # 95.000 EUR
+        r"prezzo[:\s]*([\d.,]+)",   # prezzo: 95.000
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            return _parse_price(m.group(1))
+    return 0
+
+
 def parse_immobiliare(html: str, subject: str) -> list[Listing]:
     """Parse Immobiliare.it alert email HTML into Listing objects."""
     soup = BeautifulSoup(html, "lxml")
     listings = []
+
+    # Debug: print all links to help diagnose
+    all_links = soup.select("a[href]")
+    immob_links = [a for a in all_links if "immobiliare.it" in a.get("href", "")]
+    print(f"    [debug] Total links: {len(all_links)}, immobiliare links: {len(immob_links)}")
+    for a in immob_links[:5]:
+        href = a.get("href", "")
+        text = a.get_text(strip=True)[:60]
+        print(f"    [debug] link: {text} -> {href[:80]}")
 
     # Immobiliare alert emails contain listing cards with links to annunci
     for link in soup.select("a[href*='immobiliare.it/annunci/']"):
@@ -19,28 +45,33 @@ def parse_immobiliare(html: str, subject: str) -> list[Listing]:
         # Extract listing ID from URL
         lid_match = re.search(r"/annunci/(\d+)", href)
         if not lid_match:
+            # Also try /vendita-case/.../ID/ pattern
+            lid_match = re.search(r"/(\d{5,})", href)
+        if not lid_match:
             continue
         lid = lid_match.group(1)
+
+        # Walk up to find the containing card/block
+        parent = link.find_parent(["tr", "div", "td", "table"])
 
         # Try to get title from link text or nearby elements
         title = link.get_text(strip=True)
         if not title or len(title) < 5:
-            parent = link.find_parent(["tr", "div", "td"])
             if parent:
                 title = parent.get_text(" ", strip=True)[:120]
 
-        # Look for price near the link
-        price = 0
-        parent = link.find_parent(["tr", "div", "td", "table"])
-        if parent:
-            price_match = re.search(
-                r"[€]\s*([\d.]+(?:\.\d{3})*)", parent.get_text()
-            )
-            if price_match:
-                price = _parse_price(price_match.group(1))
-
-        # Extract rooms/sqm from surrounding text
+        # Look for price - search in parent and siblings
         context = parent.get_text(" ", strip=True) if parent else ""
+        print(f"    [debug] listing {lid}: context={context[:100]}")
+        price = _extract_price(context)
+
+        # If no price in parent, try grandparent
+        if price == 0 and parent:
+            grandparent = parent.find_parent(["tr", "div", "td", "table"])
+            if grandparent:
+                gp_text = grandparent.get_text(" ", strip=True)
+                price = _extract_price(gp_text)
+
         rooms = ""
         sqm = ""
         rooms_m = re.search(r"(\d+)\s*local", context, re.IGNORECASE)
@@ -80,29 +111,37 @@ def parse_idealista(html: str, subject: str) -> list[Listing]:
     soup = BeautifulSoup(html, "lxml")
     listings = []
 
+    # Debug
+    all_links = [a for a in soup.select("a[href]") if "idealista" in a.get("href", "")]
+    print(f"    [debug] idealista links: {len(all_links)}")
+    for a in all_links[:5]:
+        print(f"    [debug] link: {a.get_text(strip=True)[:40]} -> {a.get('href','')[:80]}")
+
     for link in soup.select("a[href*='idealista.it/immobile/']"):
         href = link.get("href", "")
         lid_match = re.search(r"/immobile/(\d+)", href)
         if not lid_match:
+            lid_match = re.search(r"/(\d{5,})", href)
+        if not lid_match:
             continue
         lid = lid_match.group(1)
 
+        parent = link.find_parent(["tr", "div", "td", "table"])
+
         title = link.get_text(strip=True)
         if not title or len(title) < 5:
-            parent = link.find_parent(["tr", "div", "td"])
             if parent:
                 title = parent.get_text(" ", strip=True)[:120]
 
-        price = 0
-        parent = link.find_parent(["tr", "div", "td", "table"])
-        if parent:
-            price_match = re.search(
-                r"[€]\s*([\d.]+(?:\.\d{3})*)", parent.get_text()
-            )
-            if price_match:
-                price = _parse_price(price_match.group(1))
-
         context = parent.get_text(" ", strip=True) if parent else ""
+        print(f"    [debug] idealista listing {lid}: context={context[:100]}")
+        price = _extract_price(context)
+
+        if price == 0 and parent:
+            grandparent = parent.find_parent(["tr", "div", "td", "table"])
+            if grandparent:
+                price = _extract_price(grandparent.get_text(" ", strip=True))
+
         rooms = ""
         sqm = ""
         rooms_m = re.search(r"(\d+)\s*local", context, re.IGNORECASE)
@@ -140,28 +179,34 @@ def parse_casa(html: str, subject: str) -> list[Listing]:
     soup = BeautifulSoup(html, "lxml")
     listings = []
 
+    # Debug
+    all_links = [a for a in soup.select("a[href]") if "casa.it" in a.get("href", "")]
+    print(f"    [debug] casa.it links: {len(all_links)}")
+    for a in all_links[:5]:
+        print(f"    [debug] link: {a.get_text(strip=True)[:40]} -> {a.get('href','')[:80]}")
+
     for link in soup.select("a[href*='casa.it/']"):
         href = link.get("href", "")
-        # Casa.it listing URLs contain numeric IDs
         lid_match = re.search(r"/(\d{6,})", href)
         if not lid_match:
             continue
         lid = lid_match.group(1)
 
+        parent = link.find_parent(["tr", "div", "td", "table"])
+
         title = link.get_text(strip=True)
         if not title or len(title) < 5:
-            parent = link.find_parent(["tr", "div", "td"])
             if parent:
                 title = parent.get_text(" ", strip=True)[:120]
 
-        price = 0
-        parent = link.find_parent(["tr", "div", "td", "table"])
-        if parent:
-            price_match = re.search(
-                r"[€]\s*([\d.]+(?:\.\d{3})*)", parent.get_text()
-            )
-            if price_match:
-                price = _parse_price(price_match.group(1))
+        context = parent.get_text(" ", strip=True) if parent else ""
+        print(f"    [debug] casa listing {lid}: context={context[:100]}")
+        price = _extract_price(context)
+
+        if price == 0 and parent:
+            grandparent = parent.find_parent(["tr", "div", "td", "table"])
+            if grandparent:
+                price = _extract_price(grandparent.get_text(" ", strip=True))
 
         clean_url = href.split("?")[0]
 
