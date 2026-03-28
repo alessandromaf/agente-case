@@ -1,8 +1,6 @@
 name: Check Houses
 
 on:
-  push:
-    branches: [master]
   schedule:
     - cron: '0 8 * * *'  # daily at 8:00 UTC
   workflow_dispatch: {}   # manual trigger
@@ -25,9 +23,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper
+      - name: Check email alerts and notify Telegram
         run: python main.py
         env:
+          GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
 

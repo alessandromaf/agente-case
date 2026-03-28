@@ -1,7 +1,8 @@
 import os
 import re
 import yaml
-from scrapers import ALL_SCRAPERS
+from email_reader import fetch_new_alerts
+from email_parser import parse_alert
 from db import filter_new
 from telegram_notifier import send_listings
 
@@ -19,16 +20,31 @@ def load_config(path: str = "config.yaml") -> dict:
 def main() -> None:
     config = load_config()
 
-    # Scrape all sources
-    all_listings = []
-    for name, scrape_fn in ALL_SCRAPERS:
-        try:
-            results = scrape_fn(config)
-            all_listings.extend(results)
-        except Exception as e:
-            print(f"[{name}] Scraper failed: {e}")
+    gmail_email = config["gmail"]["email"]
+    app_password = config["gmail"]["app_password"]
 
-    print(f"\nTotal listings found: {len(all_listings)}")
+    if not gmail_email or gmail_email.startswith("$"):
+        print("ERROR: GMAIL_EMAIL not set")
+        return
+    if not app_password or app_password.startswith("$"):
+        print("ERROR: GMAIL_APP_PASSWORD not set")
+        return
+
+    # Fetch new alert emails
+    alerts = fetch_new_alerts(gmail_email, app_password)
+    if not alerts:
+        print("No new alert emails.")
+        return
+
+    # Parse listings from each email
+    all_listings = []
+    for alert in alerts:
+        print(f"Parsing {alert['source']} email: {alert['subject'][:60]}")
+        listings = parse_alert(alert)
+        print(f"  Found {len(listings)} listings")
+        all_listings.extend(listings)
+
+    print(f"\nTotal listings parsed: {len(all_listings)}")
 
     # Filter to new-only
     new_listings = filter_new(all_listings)
@@ -43,9 +59,9 @@ def main() -> None:
     channel_id = config["telegram"]["channel_id"]
 
     if not bot_token or bot_token.startswith("$"):
-        print("WARNING: TELEGRAM_BOT_TOKEN not set, skipping Telegram send.")
+        print("WARNING: TELEGRAM_BOT_TOKEN not set, printing listings instead:")
         for l in new_listings:
-            print(f"  - [{l.source}] {l.title} | {l.price} | {l.url}")
+            print(f"  [{l.source}] {l.title} | {l.price} | {l.url}")
         return
 
     sent = send_listings(new_listings, bot_token, channel_id)

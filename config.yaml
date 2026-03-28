@@ -1,8 +1,6 @@
-filters:
-  city: "forli"
-  price_min: 80000
-  price_max: 120000
-  type: "vendita"
+gmail:
+  email: "${GMAIL_EMAIL}"
+  app_password: "${GMAIL_APP_PASSWORD}"
 
 telegram:
   bot_token: "${TELEGRAM_BOT_TOKEN}"
