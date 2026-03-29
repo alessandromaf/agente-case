@@ -48,10 +48,9 @@ def _format_message(listing: Listing) -> str:
     return "\n".join(lines)
 
 
-def send_listings(listings: list[Listing], bot_token: str, channel_id: str) -> int:
-    sent = 0
-    for listing in listings:
-        text = _format_message(listing)
+def _send_message(bot_token: str, channel_id: str, text: str) -> bool:
+    """Send a single message with retry on rate limit (429)."""
+    for attempt in range(3):
         resp = httpx.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
             json={
@@ -63,8 +62,23 @@ def send_listings(listings: list[Listing], bot_token: str, channel_id: str) -> i
             timeout=15,
         )
         if resp.status_code == 200:
+            return True
+        if resp.status_code == 429:
+            retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
+            print(f"  Rate limited, waiting {retry_after}s...")
+            time.sleep(retry_after + 1)
+            continue
+        return False
+    return False
+
+
+def send_listings(listings: list[Listing], bot_token: str, channel_id: str) -> int:
+    sent = 0
+    for listing in listings:
+        text = _format_message(listing)
+        if _send_message(bot_token, channel_id, text):
             sent += 1
         else:
-            print(f"Telegram error for {listing.listing_id}: {resp.text}")
-        time.sleep(1)  # rate limit courtesy
+            print(f"Telegram error for {listing.listing_id}")
+        time.sleep(3)  # rate limit courtesy
     return sent

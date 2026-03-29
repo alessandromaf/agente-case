@@ -17,6 +17,7 @@ def _get_conn() -> sqlite3.Connection:
 
 
 def filter_new(listings: list[Listing]) -> list[Listing]:
+    """Return only listings not previously seen. Does NOT mark them as seen."""
     conn = _get_conn()
     new = []
     for listing in listings:
@@ -25,11 +26,18 @@ def filter_new(listings: list[Listing]) -> list[Listing]:
             (listing.source, listing.listing_id),
         ).fetchone()
         if row is None:
-            conn.execute(
-                "INSERT INTO seen (source, listing_id, first_seen) VALUES (?, ?, ?)",
-                (listing.source, listing.listing_id, listing.scraped_at),
-            )
             new.append(listing)
-    conn.commit()
     conn.close()
     return new
+
+
+def mark_seen(listings: list[Listing]) -> None:
+    """Mark listings as seen in the database."""
+    conn = _get_conn()
+    for listing in listings:
+        conn.execute(
+            "INSERT OR IGNORE INTO seen (source, listing_id, first_seen) VALUES (?, ?, ?)",
+            (listing.source, listing.listing_id, listing.scraped_at),
+        )
+    conn.commit()
+    conn.close()

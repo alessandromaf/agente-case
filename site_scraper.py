@@ -366,6 +366,10 @@ SITE_SCRAPERS = [
 ]
 
 
+PRICE_MIN = 70000
+PRICE_MAX = 140000
+
+
 def scrape_all_sites() -> list[Listing]:
     """Scrape all configured real estate agency websites."""
     all_listings = []
@@ -373,7 +377,13 @@ def scrape_all_sites() -> list[Listing]:
         print(f"Scraping {name}...")
         try:
             listings = scraper_fn(url)
-            all_listings.extend(listings)
+            # Apply price filter (some sites don't filter server-side)
+            filtered = [
+                l for l in listings
+                if l.price == 0 or (PRICE_MIN <= l.price <= PRICE_MAX)
+            ]
+            print(f"  After price filter ({PRICE_MIN}-{PRICE_MAX}): {len(filtered)}/{len(listings)}")
+            all_listings.extend(filtered)
         except Exception as e:
             print(f"  [site_scraper] Error scraping {name}: {e}")
         time.sleep(2)  # Be polite between sites

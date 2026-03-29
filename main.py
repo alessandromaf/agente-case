@@ -3,7 +3,7 @@ import re
 import yaml
 from email_reader import fetch_new_alerts
 from email_parser import parse_alert
-from db import filter_new
+from db import filter_new, mark_seen
 from telegram_notifier import send_listings
 from scraper import enrich_listings
 from site_scraper import scrape_all_sites
@@ -76,6 +76,9 @@ def main() -> None:
 
     sent = send_listings(new_listings, bot_token, channel_id)
     print(f"Sent {sent}/{len(new_listings)} messages to Telegram.")
+
+    # Only mark as seen after successful send
+    mark_seen(new_listings)
 
 
 if __name__ == "__main__":
