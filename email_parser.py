@@ -1,6 +1,21 @@
 import re
+import httpx
 from bs4 import BeautifulSoup
 from models import Listing
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+}
+
+
+def _resolve_redirect(url: str) -> str:
+    """Follow tracking redirects to get the actual listing URL."""
+    try:
+        with httpx.Client(headers=HEADERS, follow_redirects=True, timeout=10) as client:
+            resp = client.head(url)
+            return str(resp.url)
+    except Exception:
+        return url
 
 
 def _parse_price(text: str) -> int:
@@ -39,13 +54,31 @@ def parse_immobiliare(html: str, subject: str) -> list[Listing]:
         text = a.get_text(strip=True)[:60]
         print(f"    [debug] link: {text} -> {href[:80]}")
 
-    # Immobiliare alert emails contain listing cards with links to annunci
-    for link in soup.select("a[href*='immobiliare.it/annunci/']"):
+    # Immobiliare alert emails may use tracking redirects (clicks.immobiliare.it)
+    # or direct links to annunci — collect both
+    candidate_links = soup.select("a[href*='immobiliare.it/annunci/']")
+    if not candidate_links:
+        # Try tracking redirect links
+        candidate_links = []
+        for link in soup.select("a[href*='clicks.immobiliare.it']"):
+            href = link.get("href", "")
+            text = link.get_text(strip=True).lower()
+            # Skip generic links (logo, unsubscribe, etc.)
+            if not text or text in ("", "avvia ricerca"):
+                continue
+            candidate_links.append(link)
+
+    for link in candidate_links:
         href = link.get("href", "")
+
+        # Resolve tracking redirects
+        if "clicks.immobiliare.it" in href:
+            href = _resolve_redirect(href)
+            print(f"    [debug] resolved redirect -> {href[:80]}")
+
         # Extract listing ID from URL
         lid_match = re.search(r"/annunci/(\d+)", href)
         if not lid_match:
-            # Also try /vendita-case/.../ID/ pattern
             lid_match = re.search(r"/(\d{5,})", href)
         if not lid_match:
             continue

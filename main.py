@@ -5,6 +5,7 @@ from email_reader import fetch_new_alerts
 from email_parser import parse_alert
 from db import filter_new
 from telegram_notifier import send_listings
+from scraper import enrich_listings
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -53,6 +54,10 @@ def main() -> None:
     if not new_listings:
         print("No new listings to send.")
         return
+
+    # Enrich listings with scraped details (price, sqm, rooms, address)
+    print("Enriching listings with scraped details...")
+    enrich_listings(new_listings)
 
     # Send to Telegram
     bot_token = config["telegram"]["bot_token"]
