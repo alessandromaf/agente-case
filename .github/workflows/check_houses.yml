@@ -2,7 +2,7 @@ name: Check Houses
 
 on:
   schedule:
-    - cron: '35 * * * *'  # temporary: every hour at :35 for testing
+    - cron: '38 * * * *'  # temporary: testing schedule trigger
   workflow_dispatch: {}   # manual trigger
 
 permissions:
