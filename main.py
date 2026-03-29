@@ -33,18 +33,17 @@ def main() -> None:
         return
 
     # Fetch new alert emails
+    all_listings = []
     alerts = fetch_new_alerts(gmail_email, app_password)
     if not alerts:
         print("No new alert emails.")
-        return
-
-    # Parse listings from each email
-    all_listings = []
-    for alert in alerts:
-        print(f"Parsing {alert['source']} email: {alert['subject'][:60]}")
-        listings = parse_alert(alert)
-        print(f"  Found {len(listings)} listings")
-        all_listings.extend(listings)
+    else:
+        # Parse listings from each email
+        for alert in alerts:
+            print(f"Parsing {alert['source']} email: {alert['subject'][:60]}")
+            listings = parse_alert(alert)
+            print(f"  Found {len(listings)} listings")
+            all_listings.extend(listings)
 
     # Also scrape agency websites directly
     print("\nScraping agency websites...")
