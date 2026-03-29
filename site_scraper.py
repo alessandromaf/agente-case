@@ -432,7 +432,7 @@ def scrape_sansoni(base_url: str) -> list[Listing]:
 # ---------------------------------------------------------------------------
 SITE_SCRAPERS = [
     ("tecnocasa", "https://forli1.tecnocasa.it/appartamenti-in-vendita", scrape_tecnocasa),
-    ("romagnacase", "https://romagnacase.it/acquista-case-o-appartamenti?filter%5Bcontract_type%5D=vendita&filter%5Bprovince%5D=Forl%C3%AC-Cesena&filter%5Bcity%5D%5B%5D=Forl%C3%AC&filter%5Bsurface%5D=&filter%5Broom_count%5D=&filter%5Bprice%5D=", scrape_romagnacase),
+    ("romagnacase", "https://romagnacase.it/acquista-case-o-appartamenti?filter%5Bcontract_type%5D=vendita&filter%5Bprovince%5D=Forl%C3%AC-Cesena&filter%5Bcity%5D%5B%5D=Forl%C3%AC&filter%5Bsurface%5D=&filter%5Broom_count%5D=&filter%5Bprice%5D=60000%2C140000", scrape_romagnacase),
     ("alphacase", "https://www.alphacase.it/risultati/?tipoContratto=V&tipologiaImmobile=Appartamento&fascePrezzo=60000+-+140000&comune=40012&ordinamento=Prezzo&ordinamento2=ASC", scrape_alphacase),
     ("sansoni", "https://agenziasansoni.it/immobili/vendita?tp=&zn=63,129,72,75,80,93,95&l1=0&l2=0&p1=60000&p2=140000&cd=&cr=", scrape_sansoni),
 ]
