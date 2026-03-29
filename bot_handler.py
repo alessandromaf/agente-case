@@ -163,13 +163,34 @@ def _handle_command(bot_token: str, message: dict) -> None:
         else:
             send_text(bot_token, str(chat_id), "Errore nella rimozione.")
 
+    elif text.startswith("/export"):
+        from sheets_export import export_shortlist
+        items = get_shortlist()
+        if not items:
+            send_text(bot_token, str(chat_id), "La shortlist \u00e8 vuota, niente da esportare.")
+            return
+        send_text(bot_token, str(chat_id), "\u23f3 Esportazione in corso...")
+        try:
+            url = export_shortlist()
+            if url:
+                send_text(bot_token, str(chat_id),
+                          f"\u2705 Shortlist esportata su Google Sheets!\n\n"
+                          f"\U0001f517 [Apri spreadsheet]({url})")
+            else:
+                send_text(bot_token, str(chat_id),
+                          "Google Sheets non configurato. Serve impostare "
+                          "GOOGLE\\_SHEETS\\_CREDENTIALS e GOOGLE\\_SHEET\\_ID.")
+        except Exception as e:
+            send_text(bot_token, str(chat_id), f"Errore nell'esportazione: {e}")
+
     elif text.startswith("/start") or text.startswith("/help"):
         send_text(bot_token, str(chat_id),
                   "\U0001f3e0 *Bot Agente Case*\n\n"
                   "Premi \u2b50 *Salva* sotto un annuncio per aggiungerlo alla shortlist.\n\n"
                   "Comandi:\n"
                   "/shortlist \u2014 Vedi la tua shortlist\n"
-                  "/remove\\_N \u2014 Rimuovi elemento N dalla shortlist")
+                  "/remove\\_N \u2014 Rimuovi elemento N dalla shortlist\n"
+                  "/export \u2014 Esporta shortlist su Google Sheets")
 
 
 def process_updates(bot_token: str) -> int:
