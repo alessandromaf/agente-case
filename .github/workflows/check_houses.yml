@@ -5,6 +5,10 @@ on:
     - cron: '30 7-19 * * *'  # backup: every hour at :30, from 7:30 to 19:30 UTC
   workflow_dispatch: {}   # manual trigger
 
+concurrency:
+  group: check-houses
+  cancel-in-progress: true
+
 permissions:
   contents: write
 

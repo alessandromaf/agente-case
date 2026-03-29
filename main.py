@@ -52,13 +52,17 @@ def main() -> None:
 
     print(f"\nTotal listings parsed: {len(all_listings)}")
 
-    # Filter to new-only
+    # Filter to new-only and mark as seen immediately to prevent duplicates
     new_listings = filter_new(all_listings)
     print(f"New listings: {len(new_listings)}")
 
     if not new_listings:
         print("No new listings to send.")
         return
+
+    # Mark as seen right away (before sending) to prevent duplicate sends
+    # from concurrent or overlapping runs
+    mark_seen(new_listings)
 
     # Enrich listings with scraped details (price, sqm, rooms, address)
     print("Enriching listings with scraped details...")
@@ -77,8 +81,9 @@ def main() -> None:
     sent, message_ids = send_listings(new_listings, bot_token, channel_id)
     print(f"Sent {sent}/{len(new_listings)} messages to Telegram.")
 
-    # Only mark as seen after successful send
-    mark_seen(new_listings, message_ids)
+    # Update DB with telegram message IDs
+    if message_ids:
+        mark_seen(new_listings, message_ids)
 
 
 if __name__ == "__main__":
