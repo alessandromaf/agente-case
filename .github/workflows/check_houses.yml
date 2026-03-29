@@ -2,7 +2,7 @@ name: Check Houses
 
 on:
   schedule:
-    - cron: '0 8 * * *'  # daily at 8:00 UTC
+    - cron: '30 7-19 * * *'  # every hour at :30, from 7:30 to 19:30 UTC
   workflow_dispatch: {}   # manual trigger
 
 permissions:
