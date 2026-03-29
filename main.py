@@ -74,11 +74,11 @@ def main() -> None:
             print(f"  [{l.source}] {l.title} | {l.price} | {l.url}")
         return
 
-    sent = send_listings(new_listings, bot_token, channel_id)
+    sent, message_ids = send_listings(new_listings, bot_token, channel_id)
     print(f"Sent {sent}/{len(new_listings)} messages to Telegram.")
 
     # Only mark as seen after successful send
-    mark_seen(new_listings)
+    mark_seen(new_listings, message_ids)
 
 
 if __name__ == "__main__":

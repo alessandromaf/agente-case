@@ -48,8 +48,8 @@ def _format_message(listing: Listing) -> str:
     return "\n".join(lines)
 
 
-def _send_message(bot_token: str, channel_id: str, text: str) -> bool:
-    """Send a single message with retry on rate limit (429)."""
+def _send_message(bot_token: str, channel_id: str, text: str) -> int | None:
+    """Send a single message with retry on rate limit (429). Returns message_id or None."""
     for attempt in range(3):
         resp = httpx.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
@@ -62,23 +62,28 @@ def _send_message(bot_token: str, channel_id: str, text: str) -> bool:
             timeout=15,
         )
         if resp.status_code == 200:
-            return True
+            return resp.json().get("result", {}).get("message_id")
         if resp.status_code == 429:
             retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
             print(f"  Rate limited, waiting {retry_after}s...")
             time.sleep(retry_after + 1)
             continue
-        return False
-    return False
+        return None
+    return None
 
 
-def send_listings(listings: list[Listing], bot_token: str, channel_id: str) -> int:
+def send_listings(listings: list[Listing], bot_token: str, channel_id: str) -> tuple[int, dict[str, int]]:
+    """Send listings to Telegram. Returns (sent_count, {source:listing_id: message_id})."""
     sent = 0
+    message_ids: dict[str, int] = {}
     for listing in listings:
         text = _format_message(listing)
-        if _send_message(bot_token, channel_id, text):
+        msg_id = _send_message(bot_token, channel_id, text)
+        if msg_id:
             sent += 1
+            key = f"{listing.source}:{listing.listing_id}"
+            message_ids[key] = msg_id
         else:
             print(f"Telegram error for {listing.listing_id}")
         time.sleep(3)  # rate limit courtesy
-    return sent
+    return sent, message_ids
