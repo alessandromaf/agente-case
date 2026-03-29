@@ -7,6 +7,7 @@ from db import filter_new, mark_seen
 from telegram_notifier import send_listings
 from scraper import enrich_listings
 from site_scraper import scrape_all_sites
+from bot_handler import process_updates
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -31,6 +32,14 @@ def main() -> None:
     if not app_password or app_password.startswith("$"):
         print("ERROR: GMAIL_APP_PASSWORD not set")
         return
+
+    # Process pending bot updates (button presses, commands)
+    bot_token = config["telegram"]["bot_token"]
+    channel_id = config["telegram"]["channel_id"]
+    if bot_token and not bot_token.startswith("$"):
+        processed = process_updates(bot_token)
+        if processed:
+            print(f"Processed {processed} bot updates.")
 
     # Fetch new alert emails
     all_listings = []
@@ -69,9 +78,6 @@ def main() -> None:
     enrich_listings(new_listings)
 
     # Send to Telegram
-    bot_token = config["telegram"]["bot_token"]
-    channel_id = config["telegram"]["channel_id"]
-
     if not bot_token or bot_token.startswith("$"):
         print("WARNING: TELEGRAM_BOT_TOKEN not set, printing listings instead:")
         for l in new_listings:

@@ -1,3 +1,4 @@
+import json
 import time
 import httpx
 from models import Listing
@@ -48,17 +49,21 @@ def _format_message(listing: Listing) -> str:
     return "\n".join(lines)
 
 
-def _send_message(bot_token: str, channel_id: str, text: str) -> int | None:
+def _send_message(bot_token: str, channel_id: str, text: str,
+                   reply_markup: dict | None = None) -> int | None:
     """Send a single message with retry on rate limit (429). Returns message_id or None."""
     for attempt in range(3):
+        payload = {
+            "chat_id": channel_id,
+            "text": text,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": False,
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         resp = httpx.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
-            json={
-                "chat_id": channel_id,
-                "text": text,
-                "parse_mode": "Markdown",
-                "disable_web_page_preview": False,
-            },
+            json=payload,
             timeout=15,
         )
         if resp.status_code == 200:
@@ -68,6 +73,7 @@ def _send_message(bot_token: str, channel_id: str, text: str) -> int | None:
             print(f"  Rate limited, waiting {retry_after}s...")
             time.sleep(retry_after + 1)
             continue
+        print(f"  Telegram HTTP {resp.status_code}: {resp.text[:200]}")
         return None
     return None
 
@@ -78,7 +84,16 @@ def send_listings(listings: list[Listing], bot_token: str, channel_id: str) -> t
     message_ids: dict[str, int] = {}
     for listing in listings:
         text = _format_message(listing)
-        msg_id = _send_message(bot_token, channel_id, text)
+
+        # Inline button to save to shortlist
+        callback_data = json.dumps({"a": "save", "s": listing.source, "id": listing.listing_id})
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "\u2b50 Salva", "callback_data": callback_data}
+            ]]
+        }
+
+        msg_id = _send_message(bot_token, channel_id, text, reply_markup)
         if msg_id:
             sent += 1
             key = f"{listing.source}:{listing.listing_id}"
@@ -87,3 +102,17 @@ def send_listings(listings: list[Listing], bot_token: str, channel_id: str) -> t
             print(f"Telegram error for {listing.listing_id}")
         time.sleep(3)  # rate limit courtesy
     return sent, message_ids
+
+
+def send_text(bot_token: str, channel_id: str, text: str) -> int | None:
+    """Send a plain text message."""
+    return _send_message(bot_token, channel_id, text)
+
+
+def answer_callback(bot_token: str, callback_id: str, text: str) -> None:
+    """Answer a callback query (shows a toast in Telegram)."""
+    httpx.post(
+        f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery",
+        json={"callback_query_id": callback_id, "text": text},
+        timeout=10,
+    )
