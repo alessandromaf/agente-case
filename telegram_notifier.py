@@ -6,6 +6,10 @@ SOURCE_LABELS = {
     "immobiliare": "Immobiliare.it",
     "idealista": "Idealista.it",
     "casa": "Casa.it",
+    "tecnocasa": "Tecnocasa Forlì",
+    "romagnacase": "Romagnacase",
+    "alphacase": "Alphacase",
+    "sansoni": "Agenzia Sansoni",
 }
 
 

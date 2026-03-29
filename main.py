@@ -6,6 +6,7 @@ from email_parser import parse_alert
 from db import filter_new
 from telegram_notifier import send_listings
 from scraper import enrich_listings
+from site_scraper import scrape_all_sites
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -44,6 +45,11 @@ def main() -> None:
         listings = parse_alert(alert)
         print(f"  Found {len(listings)} listings")
         all_listings.extend(listings)
+
+    # Also scrape agency websites directly
+    print("\nScraping agency websites...")
+    site_listings = scrape_all_sites()
+    all_listings.extend(site_listings)
 
     print(f"\nTotal listings parsed: {len(all_listings)}")
 
