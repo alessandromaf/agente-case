@@ -54,73 +54,81 @@ def parse_immobiliare(html: str, subject: str) -> list[Listing]:
         text = a.get_text(strip=True)[:60]
         print(f"    [debug] link: {text} -> {href[:80]}")
 
-    # Immobiliare alert emails may use tracking redirects (clicks.immobiliare.it)
-    # or direct links to annunci — collect both
-    candidate_links = soup.select("a[href*='immobiliare.it/annunci/']")
-    if not candidate_links:
-        # Try tracking redirect links
-        candidate_links = []
-        for link in soup.select("a[href*='clicks.immobiliare.it']"):
-            href = link.get("href", "")
-            text = link.get_text(strip=True).lower()
-            # Skip generic links (logo, unsubscribe, etc.)
-            if not text or text in ("", "avvia ricerca"):
-                continue
-            candidate_links.append(link)
+    # Immobiliare emails use tracking redirects (clicks.immobiliare.it).
+    # The listing card is a table with image on left and data on right.
+    # Strategy: find title links (have a title attribute with listing info),
+    # then walk up to the card container to get price/sqm/rooms.
 
-    for link in candidate_links:
+    # Collect unique listing links by href (skip image-only and button dupes)
+    seen_hrefs = {}
+    for link in soup.select("a[href*='clicks.immobiliare.it']"):
         href = link.get("href", "")
+        text = link.get_text(strip=True)
+        title_attr = link.get("title", "")
+        # Skip generic links
+        if text.lower() in ("", "avvia ricerca"):
+            continue
+        # Prefer the title link (has actual listing name), not image or button
+        if href not in seen_hrefs or (title_attr and len(text) > 5):
+            seen_hrefs[href] = link
 
-        # Resolve tracking redirects
+    # Also handle direct links (non-redirect)
+    for link in soup.select("a[href*='immobiliare.it/annunci/']"):
+        href = link.get("href", "")
+        if href not in seen_hrefs:
+            seen_hrefs[href] = link
+
+    for href, link in seen_hrefs.items():
+        # Walk up to the outermost card container to get all text
+        # The card is typically a <td> containing both image and data tables
+        card = link
+        for ancestor in link.parents:
+            if ancestor.name == "td" and ancestor != soup:
+                card_text = ancestor.get_text(" ", strip=True)
+                # The card container has price + sqm + title — typically 50-500 chars
+                if len(card_text) > 50 and ("€" in card_text or "m²" in card_text or "locali" in card_text.lower()):
+                    card = ancestor
+                    break
+
+        context = card.get_text(" ", strip=True) if card else ""
+        print(f"    [debug] immobiliare card context: {context[:200]}")
+
+        # Title from link text or title attribute
+        title = link.get_text(strip=True).replace("\ufeff", "")
+        if not title or len(title) < 5:
+            title = link.get("title", "")
+
+        # Resolve redirect to get actual listing URL and ID
+        actual_url = href
         if "clicks.immobiliare.it" in href:
-            href = _resolve_redirect(href)
-            print(f"    [debug] resolved redirect -> {href[:80]}")
+            actual_url = _resolve_redirect(href)
+            print(f"    [debug] resolved -> {actual_url[:100]}")
 
-        # Extract listing ID from URL
-        lid_match = re.search(r"/annunci/(\d+)", href)
+        lid_match = re.search(r"/annunci/(\d+)", actual_url)
         if not lid_match:
-            lid_match = re.search(r"/(\d{5,})", href)
+            lid_match = re.search(r"/(\d{5,})", actual_url)
         if not lid_match:
             continue
         lid = lid_match.group(1)
 
-        # Walk up to find the containing card/block
-        parent = link.find_parent(["tr", "div", "td", "table"])
-
-        # Try to get title from link text or nearby elements
-        title = link.get_text(strip=True)
-        if not title or len(title) < 5:
-            if parent:
-                title = parent.get_text(" ", strip=True)[:120]
-
-        # Look for price - search in parent and siblings
-        context = parent.get_text(" ", strip=True) if parent else ""
-        print(f"    [debug] listing {lid}: context={context[:100]}")
         price = _extract_price(context)
-
-        # If no price in parent, try grandparent
-        if price == 0 and parent:
-            grandparent = parent.find_parent(["tr", "div", "td", "table"])
-            if grandparent:
-                gp_text = grandparent.get_text(" ", strip=True)
-                price = _extract_price(gp_text)
 
         rooms = ""
         sqm = ""
-        rooms_m = re.search(r"(\d+)\s*local", context, re.IGNORECASE)
+        rooms_m = re.search(r"(\d+)\+?\s*local", context, re.IGNORECASE)
         if rooms_m:
             rooms = rooms_m.group(1)
-        sqm_m = re.search(r"(\d+)\s*m[²2q]", context, re.IGNORECASE)
+        sqm_m = re.search(r"(\d+)\s*m[²2q\u00b2]", context, re.IGNORECASE)
         if sqm_m:
             sqm = sqm_m.group(1)
 
         # Extract address from title
         address = ""
-        addr_m = re.search(r"in vendita (?:in |a )(.+)", title, re.IGNORECASE)
+        addr_m = re.search(r"(?:in vendita (?:in |a )|all'asta\s+(?:via |in |a ))(.+?)(?:,\s*\w+)?$", title, re.IGNORECASE)
         if addr_m:
             address = addr_m.group(1).strip()
 
-        clean_url = href.split("?")[0]
+        clean_url = actual_url.split("?")[0]
 
         listings.append(Listing(
             source="immobiliare",
