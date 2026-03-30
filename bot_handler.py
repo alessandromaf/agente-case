@@ -1,6 +1,10 @@
 """Handle Telegram bot updates: callback queries (button presses) and commands."""
 
+import csv
+import io
 import json
+import re
+import tempfile
 import httpx
 from db import (
     get_listing_by_message_id, add_to_shortlist, remove_from_shortlist,
@@ -163,34 +167,107 @@ def _handle_command(bot_token: str, message: dict) -> None:
         else:
             send_text(bot_token, str(chat_id), "Errore nella rimozione.")
 
+    elif text.startswith("/save"):
+        # /save <url> — save a listing by URL
+        parts = text.split(None, 1)
+        if len(parts) < 2:
+            send_text(bot_token, str(chat_id),
+                      "Uso: /save URL\nEs: /save https://romagnacase.it/acquista-case-o-appartamenti/...")
+            return
+
+        url = parts[1].strip()
+
+        # Detect source from URL
+        source = "unknown"
+        listing_id = url
+        if "tecnocasa.it" in url:
+            source = "tecnocasa"
+            m = re.search(r"-(\d{6,})", url)
+            if m:
+                listing_id = m.group(1)
+        elif "romagnacase.it" in url:
+            source = "romagnacase"
+            m = re.search(r"(IM-\d+)", url)
+            if m:
+                listing_id = m.group(1)
+        elif "alphacase.it" in url:
+            source = "alphacase"
+            m = re.search(r"-(\d{6,})", url)
+            if m:
+                listing_id = m.group(1)
+        elif "sansoni.it" in url:
+            source = "sansoni"
+            listing_id = url.rstrip("/").split("/")[-1]
+        elif "immobiliare.it" in url:
+            source = "immobiliare"
+            m = re.search(r"/annunci/(\d+)", url)
+            if m:
+                listing_id = m.group(1)
+        elif "idealista.it" in url:
+            source = "idealista"
+            m = re.search(r"/immobile/(\d+)", url)
+            if m:
+                listing_id = m.group(1)
+        elif "casa.it" in url:
+            source = "casa"
+            m = re.search(r"/immobili/(\d+)", url)
+            if m:
+                listing_id = m.group(1)
+
+        # Try to get details from seen DB
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT source, listing_id FROM seen WHERE source = ? AND listing_id = ?",
+            (source, listing_id),
+        ).fetchone()
+        conn.close()
+
+        title = url.rstrip("/").split("/")[-1].replace("-", " ").title()[:100]
+        added = add_to_shortlist(source, listing_id, url, title, 0, "", "", "")
+        if added:
+            send_text(bot_token, str(chat_id), f"\u2b50 Salvato: {title}")
+        else:
+            send_text(bot_token, str(chat_id), "Gi\u00e0 nella shortlist")
+
     elif text.startswith("/export"):
-        from sheets_export import export_shortlist
         items = get_shortlist()
         if not items:
             send_text(bot_token, str(chat_id), "La shortlist \u00e8 vuota, niente da esportare.")
             return
-        send_text(bot_token, str(chat_id), "\u23f3 Esportazione in corso...")
-        try:
-            url = export_shortlist()
-            if url:
-                send_text(bot_token, str(chat_id),
-                          f"\u2705 Shortlist esportata su Google Sheets!\n\n"
-                          f"\U0001f517 [Apri spreadsheet]({url})")
-            else:
-                send_text(bot_token, str(chat_id),
-                          "Google Sheets non configurato. Serve impostare "
-                          "GOOGLE\\_SHEETS\\_CREDENTIALS e GOOGLE\\_SHEET\\_ID.")
-        except Exception as e:
-            send_text(bot_token, str(chat_id), f"Errore nell'esportazione: {e}")
+
+        # Generate CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["#", "Titolo", "Prezzo", "Locali", "m\u00b2", "Indirizzo", "Fonte", "Link", "Data"])
+        for i, item in enumerate(items, 1):
+            label = SOURCE_LABELS.get(item["source"], item["source"])
+            price_str = f"\u20ac {item['price']:,}".replace(",", ".") if item["price"] else ""
+            writer.writerow([
+                i, item["title"], price_str, item["rooms"], item["sqm"],
+                item["address"], label, item["url"],
+                item["added_at"][:10] if item["added_at"] else "",
+            ])
+
+        # Send CSV file via Telegram
+        csv_bytes = output.getvalue().encode("utf-8-sig")  # BOM for Excel compatibility
+        resp = httpx.post(
+            f"https://api.telegram.org/bot{bot_token}/sendDocument",
+            data={"chat_id": str(chat_id), "caption": f"\u2b50 Shortlist ({len(items)} annunci)"},
+            files={"document": ("shortlist.csv", csv_bytes, "text/csv")},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            send_text(bot_token, str(chat_id), "Errore nell'invio del file.")
 
     elif text.startswith("/start") or text.startswith("/help"):
         send_text(bot_token, str(chat_id),
                   "\U0001f3e0 *Bot Agente Case*\n\n"
                   "Premi \u2b50 *Salva* sotto un annuncio per aggiungerlo alla shortlist.\n\n"
                   "Comandi:\n"
+                  "/save URL \u2014 Salva un annuncio tramite link\n"
                   "/shortlist \u2014 Vedi la tua shortlist\n"
                   "/remove\\_N \u2014 Rimuovi elemento N dalla shortlist\n"
-                  "/export \u2014 Esporta shortlist su Google Sheets")
+                  "/export \u2014 Esporta shortlist come CSV")
 
 
 def process_updates(bot_token: str) -> int:
