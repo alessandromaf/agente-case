@@ -270,6 +270,22 @@ def _handle_command(bot_token: str, message: dict) -> None:
                   "/export \u2014 Esporta shortlist come CSV")
 
 
+def register_commands(bot_token: str) -> None:
+    """Register bot commands with Telegram (shows in the / menu)."""
+    commands = [
+        {"command": "shortlist", "description": "Vedi la tua shortlist"},
+        {"command": "remove_1", "description": "Rimuovi elemento N dalla shortlist (es. /remove_2)"},
+        {"command": "save",     "description": "Salva un annuncio tramite URL"},
+        {"command": "export",   "description": "Esporta shortlist come CSV"},
+        {"command": "help",     "description": "Mostra i comandi disponibili"},
+    ]
+    httpx.post(
+        f"https://api.telegram.org/bot{bot_token}/setMyCommands",
+        json={"commands": commands},
+        timeout=10,
+    )
+
+
 def process_updates(bot_token: str) -> int:
     """Process all pending Telegram updates. Returns number processed."""
     updates = _get_updates(bot_token)

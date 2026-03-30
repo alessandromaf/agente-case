@@ -7,7 +7,7 @@ from db import filter_new, mark_seen
 from telegram_notifier import send_listings
 from scraper import enrich_listings
 from site_scraper import scrape_all_sites
-from bot_handler import process_updates
+from bot_handler import process_updates, register_commands
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -37,6 +37,7 @@ def main() -> None:
     bot_token = config["telegram"]["bot_token"]
     channel_id = config["telegram"]["channel_id"]
     if bot_token and not bot_token.startswith("$"):
+        register_commands(bot_token)
         processed = process_updates(bot_token)
         if processed:
             print(f"Processed {processed} bot updates.")
