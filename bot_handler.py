@@ -8,7 +8,7 @@ import tempfile
 import httpx
 from db import (
     get_listing_by_message_id, add_to_shortlist, remove_from_shortlist,
-    get_shortlist, _get_conn,
+    get_shortlist,
 )
 from telegram_notifier import answer_callback, send_text, SOURCE_LABELS
 
@@ -24,18 +24,6 @@ def _get_updates(bot_token: str, offset: int = 0) -> list[dict]:
         return resp.json().get("result", [])
     return []
 
-
-def _get_listing_info(source: str, listing_id: str) -> dict | None:
-    """Get full listing info from the seen table."""
-    conn = _get_conn()
-    row = conn.execute(
-        "SELECT source, listing_id, telegram_message_id FROM seen WHERE source = ? AND listing_id = ?",
-        (source, listing_id),
-    ).fetchone()
-    conn.close()
-    if row:
-        return {"source": row[0], "listing_id": row[1]}
-    return None
 
 
 def _handle_callback(bot_token: str, callback: dict) -> None:
@@ -213,14 +201,6 @@ def _handle_command(bot_token: str, message: dict) -> None:
             m = re.search(r"/immobili/(\d+)", url)
             if m:
                 listing_id = m.group(1)
-
-        # Try to get details from seen DB
-        conn = _get_conn()
-        row = conn.execute(
-            "SELECT source, listing_id FROM seen WHERE source = ? AND listing_id = ?",
-            (source, listing_id),
-        ).fetchone()
-        conn.close()
 
         title = url.rstrip("/").split("/")[-1].replace("-", " ").title()[:100]
         added = add_to_shortlist(source, listing_id, url, title, 0, "", "", "")

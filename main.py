@@ -7,7 +7,8 @@ from db import filter_new, mark_seen
 from telegram_notifier import send_listings
 from scraper import enrich_listings
 from site_scraper import scrape_all_sites
-from bot_handler import process_updates, register_commands
+from bot_handler import register_commands
+from db import init_db
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -36,11 +37,9 @@ def main() -> None:
     # Process pending bot updates (button presses, commands)
     bot_token = config["telegram"]["bot_token"]
     channel_id = config["telegram"]["channel_id"]
+    init_db()
     if bot_token and not bot_token.startswith("$"):
         register_commands(bot_token)
-        processed = process_updates(bot_token)
-        if processed:
-            print(f"Processed {processed} bot updates.")
 
     # Fetch new alert emails
     all_listings = []
