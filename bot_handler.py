@@ -252,6 +252,12 @@ def _handle_command(bot_token: str, message: dict) -> None:
 
 def register_commands(bot_token: str) -> None:
     """Register bot commands with Telegram (shows in the / menu)."""
+    # Clear first to remove any stale manually-set commands
+    httpx.post(
+        f"https://api.telegram.org/bot{bot_token}/deleteMyCommands",
+        json={},
+        timeout=10,
+    )
     commands = [
         {"command": "shortlist", "description": "Vedi la tua shortlist"},
         {"command": "remove_1", "description": "Rimuovi elemento N dalla shortlist (es. /remove_2)"},
