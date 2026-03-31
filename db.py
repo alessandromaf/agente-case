@@ -1,4 +1,5 @@
 import os
+import sys
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -10,6 +11,11 @@ DB_PATH = Path(__file__).parent / "seen_listings.db"
 
 # SQL placeholder style differs between drivers
 _PH = "%s" if DATABASE_URL else "?"
+
+# Fail fast if running on CI without a persistent database
+if os.environ.get("GITHUB_ACTIONS") and not DATABASE_URL:
+    print("FATAL: DATABASE_URL not set — SQLite is ephemeral on CI, listings will be re-sent every run.")
+    sys.exit(1)
 
 
 @contextmanager
@@ -41,6 +47,8 @@ def _ph(n: int) -> str:
 
 
 def init_db() -> None:
+    backend = "PostgreSQL" if DATABASE_URL else f"SQLite ({DB_PATH})"
+    print(f"[db] Using {backend}")
     with _connect() as conn:
         cur = conn.cursor()
         if DATABASE_URL:
@@ -86,6 +94,9 @@ def init_db() -> None:
             cols = [r[1] for r in cur.execute("PRAGMA table_info(seen)").fetchall()]
             if "telegram_message_id" not in cols:
                 cur.execute("ALTER TABLE seen ADD COLUMN telegram_message_id INTEGER")
+        cur.execute("SELECT COUNT(*) FROM seen")
+        count = cur.fetchone()[0]
+        print(f"[db] {count} listings already marked as seen")
 
 
 def filter_new(listings: list[Listing]) -> list[Listing]:
