@@ -226,11 +226,12 @@ def _parse_alphacase_page(soup: BeautifulSoup) -> list[Listing]:
         if href.startswith("/"):
             href = "https://www.alphacase.it" + href
 
-        lid_match = re.search(r"-(\d{6,})", href)
+        clean_href = href.split("?")[0]
+        lid_match = re.search(r"-(\d{6,})", clean_href)
         if lid_match:
             lid = lid_match.group(1)
         else:
-            lid = href.rstrip("/").split("/")[-1]
+            lid = clean_href.rstrip("/").split("/")[-1]
 
         card = link
         for ancestor in link.parents:
@@ -319,7 +320,7 @@ def _parse_sansoni_page(soup: BeautifulSoup) -> list[Listing]:
         if href.startswith("/"):
             href = "https://agenziasansoni.it" + href
 
-        slug = href.rstrip("/").split("/")[-1]
+        slug = href.split("?")[0].rstrip("/").split("/")[-1]
         ref_match = re.search(r"-(\d{3,})$", slug)
         lid = ref_match.group(1) if ref_match else slug
 
